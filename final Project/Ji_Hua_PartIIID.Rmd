@@ -1,0 +1,300 @@
+---
+title: "PartIIID"
+author: "Hua Ji"
+date: "4/24/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load packages
+The `tidyverse` and `caret` packages are loaded below.
+
+```{r, load_packages}
+library(tidyverse)
+library(caret)
+```
+
+
+## Read and prepare data
+
+The code chunk below reads in the `df_all` data and displays 
+
+```{r, read_data}
+df_all <- readr::read_csv("final_project_train.csv", col_names = TRUE)
+df_all %>%glimpse()
+```
+
+
+
+## Resampling and performance metrics
+caret will manage the training, tuning, and assessment of the models. 
+```{r}
+ctrl_roc <- trainControl(method ='cv', number = 5,
+                             summaryFunction = twoClassSummary,
+                             classProbs = TRUE,
+                             savePredictions = TRUE)
+
+metric_data <- "ROC"
+```
+
+##1.Linear models:
+##1a)All categorical and continuous inputs - linear additive features
+```{r}
+set.seed(4321)
+fit_glm_1a <- train(outcome~.-response-rowid,
+                    data = df_all, 
+                    method ="glm", 
+                    metric = metric_data, 
+                    preProcess=c("center", "scale"),
+                    trControl = ctrl_roc)
+
+fit_glm_1a
+```
+
+
+##1b)All pairwise interactions of continuous inputs, include additive categorical features
+```{r}
+set.seed(4321)
+fit_glm_1b <- train(outcome~(.-response-rowid-region-customer)^2+(region+customer),
+                    data = df_all, 
+                    method ="glm", 
+                    metric = metric_data, 
+                    preProcess=c("center", "scale"),
+                    trControl = ctrl_roc)
+
+fit_glm_1b
+```
+
+##1c)The 2 models selected from iiA)
+
+```{r}
+set.seed(4321)
+fit_glm_1c <- train(outcome~(.-rowid-response-customer)*region,
+                    data = df_all, 
+                    method ="glm", 
+                    metric = metric_data, 
+                    preProcess=c("center", "scale"),
+                    trControl = ctrl_roc)
+
+fit_glm_1c
+```
+
+##1d)The 2 models selected from iiA)
+
+```{r}
+set.seed(4321)
+fit_glm_1d <- train(outcome~customer*region,
+                    data = df_all, 
+                    method ="glm", 
+                    metric = metric_data, 
+                    preProcess=c("center", "scale"),
+                    trControl = ctrl_roc)
+
+fit_glm_1d
+```
+##2.Regularized regression with Elastic net:
+##2a)All pairwise interactions of continuous inputs, include additive categorical features
+```{r}
+set.seed(4321)
+fit_glmnet_2a<- train(outcome~(.-response-rowid-region-customer)^2+(region+customer),
+                    data = df_all, 
+                    method ="glmnet", 
+                    metric = metric_data, 
+                    preProcess=c("center", "scale"),
+                    trControl = ctrl_roc)
+  
+
+fit_glmnet_2a
+
+```
+
+##2b)All categorical and continuous variables – linear additive
+set.seed(4321)
+```{r}
+fit_glmnet_2b<- train(outcome~.-response-rowid-region-customer,
+                    data = df_all, 
+                    method ="glmnet", 
+                    metric = metric_data, 
+                    preProcess=c("center", "scale"),
+                    trControl = ctrl_roc)
+  
+
+fit_glmnet_2b
+
+```
+```{r}
+fit_glmnet_2b %>% readr::write_rds('fit_glmnet_2b.rds')
+```
+
+
+##2c)Interact region with continuous inputs, do not include customer
+```{r}
+set.seed(4321)
+fit_glmnet_2c<- train(outcome~(.-rowid-response-customer)*region,
+                    data = df_all, 
+                    method ="glmnet", 
+                    metric = metric_data, 
+                    preProcess=c("center", "scale"),
+                    trControl = ctrl_roc)
+  
+
+fit_glmnet_2c
+
+```
+
+##3.Neural network
+
+##3a)All categorical and continuous variables – linear additive
+
+```{r}
+set.seed(4321)
+fit_nnet_3a<- train(outcome~.-response-rowid-region-customer,
+                    data = df_all, 
+                    method ="nnet", 
+                    metric = metric_data, 
+                    preProcess=c("center", "scale"),
+                    trControl = ctrl_roc,
+                    trace = FALSE)
+
+fit_nnet_3a
+
+```
+
+
+##4.Random forest
+
+##4a)All categorical and continuous variables – linear additive
+
+```{r}
+set.seed(4321)
+fit_rf_4a<- train(outcome~.-response-rowid-region-customer,
+                    data = df_all, 
+                    method ="rf", 
+                    metric = metric_data, 
+                    trControl = ctrl_roc,
+                    importance = TRUE)
+
+fit_rf_4a
+
+```
+
+
+##5.Gradient boosted tree
+
+
+##5a)All categorical and continuous variables – linear additive
+
+```{r}
+set.seed(4321)
+fit_xgb_5a<- train(outcome~.-response-rowid-region-customer,
+                    data = df_all, 
+                    method ="xgbTree", 
+                    metric = metric_data, 
+                    trControl = ctrl_roc,
+                   objective = 'reg:squarederror')
+
+fit_xgb_5a
+
+```
+
+
+##6.Support Vector Machines (SVM)
+##6a)All categorical and continuous inputs - linear additive features
+
+```{r}
+set.seed(4321)
+fit_svm_6a<- train(outcome~.-response-rowid-region-customer,
+                    data = df_all, 
+                    method ="svmRadial", 
+                    metric = metric_data,
+                    preProcess=c("center","scale"),
+                    trControl = ctrl_roc)
+
+fit_svm_6a
+
+```
+
+
+##7.Decision tree
+##7a)All categorical and continuous inputs - linear additive features
+
+```{r}
+set.seed(4321)
+fit_rpart_7a<- train(outcome~.-response-rowid-region-customer,
+                    data = df_all, 
+                    method ="rpart", 
+                    metric = metric_data,
+                    trControl = ctrl_roc)
+
+fit_rpart_7a
+
+```
+
+###Compare models
+##Compile the resampling results together.
+
+Because the LM_2 has too large rmse value, so we will remove it to see the trend.
+
+```{r, solution_05a, eval=TRUE}
+
+my_results <- resamples(list(LM_1 = fit_glm_1a,
+                             LM_3 = fit_glm_1c,
+                             LM_4 = fit_glm_1d,
+                             ENET_1 = fit_glmnet_2a,
+                             ENET_2 = fit_glmnet_2b,
+                             ENET_3 = fit_glmnet_2c,
+                             NNET = fit_nnet_3a,
+                             RF = fit_rf_4a,
+                             XGB = fit_xgb_5a,
+                             SVM = fit_svm_6a,
+                             CART = fit_rpart_7a))
+```
+
+Compare models based on RMSE.
+```{r}
+dotplot(my_results)
+
+```
+From ROC, Sensitivity, and Specificity, we can choose Enet_1,Enet_1,RF,NNET as the top four best model. Now let's extracts the hold-out set predictions associated with the best tuning parameter values for 4 of the models trained,the elastic net, the neural network, and the random forest.
+
+```{r, extract_holdout_preds, eval=TRUE}
+model_pred_results <- fit_rf_4a$pred %>% tibble::as_tibble() %>% 
+  filter(mtry == fit_rf_4a$bestTune$mtry) %>% 
+  select(pred, obs, event, non_event, rowIndex, Resample) %>% 
+  mutate(model_name = "RF") %>% 
+  bind_rows(fit_glmnet_2a$pred %>% tibble::as_tibble() %>% 
+              filter(alpha == fit_glmnet_2a$bestTune$alpha,
+                     lambda == fit_glmnet_2a$bestTune$lambda) %>% 
+              select(pred, obs,event, non_event, rowIndex, Resample) %>% 
+              mutate(model_name = "ENET_1")) %>% 
+  bind_rows(fit_glmnet_2b$pred %>% tibble::as_tibble() %>% 
+              filter(alpha == fit_glmnet_2b$bestTune$alpha,
+                     lambda == fit_glmnet_2b$bestTune$lambda) %>% 
+              select(pred, obs, event, non_event, rowIndex, Resample) %>% 
+              mutate(model_name = "ENET_2")) %>% 
+  bind_rows(fit_nnet_3a$pred %>% tibble::as_tibble() %>% 
+              filter(size == fit_nnet_3a$bestTune$size,
+                     decay == fit_nnet_3a$bestTune$decay) %>% 
+              select(pred, obs, event, non_event, rowIndex, Resample) %>% 
+              mutate(model_name = "NNET"))
+```
+
+The first few rows of the `model_pred_results` object are displayed for you in the code chunk below.  
+
+```{r, view_extract_holdout_preds, eval=TRUE}
+model_pred_results %>% head()
+```
+
+```{r, load_yardstick_package, eval=TRUE}
+library(yardstick)
+```
+
+```{r, solution_05b}
+###
+model_pred_results%>% group_by(model_name)%>% roc_curve(obs,event)%>% autoplot()
+```
+
+According to the the AUC, we also can get the conclusion that the ENET_1 is the best model in classification.

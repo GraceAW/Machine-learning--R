@@ -1,0 +1,314 @@
+---
+title: "Final Project for PPG Exploration"
+author: "Hua Ji"
+date: "4/16/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load packages
+The `tidyverse` and `caret` packages are loaded below.
+
+```{r, load_packages}
+library(tidyverse)
+library(caret)
+```
+
+## Read and prepare data
+
+The code chunk below reads in the `df_all` data and displays 
+
+```{r, read_data}
+df_all <- readr::read_csv("final_project_train.csv", col_names = TRUE)
+df_all %>%glimpse()
+```
+
+##Added log-transformed response
+```{r}
+log_all<-df_all %>%mutate(logresponse =log(response))
+log_all%>%glimpse()
+```
+
+## creates a long-format dataset by gathering the input features into a single column via the pivot_longer() function.
+
+```{r, make_lf_data, eval=TRUE}
+lf_all <- log_all %>% 
+  tibble::rowid_to_column("obs_id") %>% 
+  pivot_longer(!c("obs_id","outcome", "customer", "region", "response", "rowid","logresponse")) %>%
+  mutate(input_id = str_sub(name, 2, 5))
+lf_all %>% glimpse()
+```
+
+
+### Part i: Exploration
+
+### 1.Visualize the distributions of variables in the data set.
+
+## 1a) Counts for categorical variables
+
+```{r, solution_01a1}
+lf_all%>% ggplot(mapping = aes(x=outcome))+
+  geom_bar(mapping = aes(y = stat(prop),
+                         group = 1)) +
+  geom_text(stat = 'count',
+            mapping = aes(y = after_stat( count / sum(count) ),
+                          label = after_stat( signif(count / sum(count), 3) )),
+            color = 'red', nudge_y = 0.01, size = 3) +
+        theme_bw()
+mean(df_all$outcome =="event")
+```
+
+
+```{r, solution_01a2}
+df_all%>% ggplot(mapping = aes(x=region))+
+       geom_bar(mapping = aes(y = stat(prop),
+                         group = 1)) +
+       geom_text(stat = 'count',
+            mapping = aes(y = after_stat( count / sum(count) ),
+                          label = after_stat( signif(count / sum(count), 3) )),
+            color = 'red', nudge_y = 0.01, size = 3) +
+        theme_bw()
+```
+
+
+```{r, solution_01a3}
+df_all%>% ggplot(mapping = aes(x=customer))+
+       geom_bar(mapping = aes(y = stat(prop),
+                         group = 1)) +
+       geom_text(stat = 'count',
+            mapping = aes(y = after_stat( count / sum(count) ),
+                          label = after_stat( signif(count / sum(count), 3) )),
+            color = 'red', nudge_y = 0.01, size = 3) +
+        theme_bw()
+```
+
+##1b) Distributions for continuous variables. 
+
+```{r}
+###
+lf_all%>%ggplot(mapping = aes(x=input_id,y = value))+
+           geom_boxplot(mapping =aes(group=input_id))
+```
+```{r}
+lf_all%>% ggplot(mapping = aes(x = value))+
+            geom_freqpoly(mapping = aes(group=input_id),bins=21 )+
+            facet_wrap(~input_id, scales = 'free_y')
+```
+
+```{r, solution_01b}
+lf_all%>% ggplot(mapping = aes(x=value))+
+        geom_histogram(bin=5)+
+        facet_wrap(~name,scales = 'free')+
+        theme_bw()
+```
+
+From the histgram we can see that most of the the distributions are Gaussian like. But some are not, like xw_02,xw_03.
+
+
+### 2.Consider conditioning (grouping or “breaking up”) the continuous variables based on the categorical variables.
+
+## 2a)Based on region
+```{r,solution_02a1}
+lf_all%>%ggplot(mapping = aes(x = input_id, y = value)) +
+  geom_boxplot(mapping = aes(group = interaction(input_id, region),
+                             fill = region,
+                             color = region),
+               alpha = 0.25) +
+  ggthemes::scale_color_colorblind() +
+  ggthemes::scale_fill_colorblind() +
+  theme_bw() +
+  theme(legend.position = "top")
+```
+
+```{r,solution_02a2}
+lf_all%>% ggplot(mapping = aes(x = input_id, y = value)) +
+  geom_boxplot(mapping = aes(group = interaction(input_id, region),
+                             fill = region,
+                             color = region),
+               alpha = 0.1) +
+  stat_summary(fun.data = 'mean_se',
+               fun.args = list(mult = 2),
+               mapping = aes(group = interaction(input_id, region),
+                             color = region),
+               position = position_dodge(0.75)) +
+  ggthemes::scale_color_colorblind() +
+  ggthemes::scale_fill_colorblind() +
+  theme_bw() +
+  theme(legend.position = "top")
+
+```
+
+```{r,solution_02a3}
+lf_all%>% ggplot(mapping = aes(x = as.factor(input_id), y = value)) +
+  stat_summary(fun.data = 'mean_se',
+               fun.args = list(mult = 2),
+               mapping = aes(group = interaction(input_id, region),
+                             color = region)) +
+  ggthemes::scale_color_colorblind() +
+  ggthemes::scale_fill_colorblind() +
+  theme_bw() +
+  theme(legend.position = "top")
+
+```
+
+## 2b)Based on customer
+
+```{r,solution_02b1}
+lf_all%>%ggplot(mapping = aes(x = input_id, y = value)) +
+  geom_boxplot(mapping = aes(group = interaction(input_id, customer),
+                             fill = customer,
+                             color = customer),
+               alpha = 0.25) +
+  ggthemes::scale_color_colorblind() +
+  ggthemes::scale_fill_colorblind() +
+  theme_bw() +
+  theme(legend.position = "top")
+```
+
+```{r,solution_02b2}
+lf_all%>%ggplot(mapping = aes(x = input_id, y = value)) +
+  geom_boxplot(mapping = aes(group = interaction(input_id, customer),
+                             fill = customer,
+                             color = customer),
+               alpha = 0.1) +
+  stat_summary(fun.data = 'mean_se',
+               fun.args = list(mult = 2),
+               mapping = aes(group = interaction(input_id, customer),
+                             color = customer),
+               position = position_dodge(0.75)) +
+  ggthemes::scale_color_colorblind() +
+  ggthemes::scale_fill_colorblind() +
+  theme_bw() +
+  theme(legend.position = "top")
+```
+
+```{r,solution_02b3}
+lf_all%>%ggplot(mapping = aes(x = as.factor(input_id), y = value)) +
+  stat_summary(fun.data = 'mean_se',
+               fun.args = list(mult = 2),
+               mapping = aes(group = interaction(input_id, customer),
+                             color = customer)) +
+  ggthemes::scale_color_colorblind() +
+  ggthemes::scale_fill_colorblind() +
+  theme_bw() +
+  theme(legend.position = "top")
+```
+
+Based on the categorical variables (region and customers), there are no significant difference in continuous variable distribution and their summary statics for Bing lexicon (xb), NRC lexicon (xn), AFINN (xa) and sedimentr derived features (xs). But it can be seen that word count derived features (xw) are different across region and customers.
+
+## 2c) Based on the binary outcome
+
+```{r,solution_02c1}
+lf_all%>%ggplot(mapping = aes(x = input_id, y = value)) +
+  geom_boxplot(mapping = aes(group = interaction(input_id, outcome),
+                             fill = outcome,
+                             color = outcome),
+               alpha = 0.25) +
+  ggthemes::scale_color_colorblind() +
+  ggthemes::scale_fill_colorblind() +
+  theme_bw() +
+  theme(legend.position = "top")
+```
+
+```{r,solution_02c2}
+lf_all%>%ggplot(mapping = aes(x = input_id, y = value)) +
+  geom_boxplot(mapping = aes(group = interaction(input_id, outcome),
+                             fill = outcome,
+                             color = outcome),
+               alpha = 0.1) +
+  stat_summary(fun.data = 'mean_se',
+               fun.args = list(mult = 2),
+               mapping = aes(group = interaction(input_id, outcome),
+                             color = outcome),
+               position = position_dodge(0.75)) +
+  ggthemes::scale_color_colorblind() +
+  ggthemes::scale_fill_colorblind() +
+  theme_bw() +
+  theme(legend.position = "top")
+```
+
+```{r,solution_02c3}
+lf_all%>%ggplot(mapping = aes(x = as.factor(input_id), y = value)) +
+  stat_summary(fun.data = 'mean_se',
+               fun.args = list(mult = 2),
+               mapping = aes(group = interaction(input_id, outcome),
+                             color = outcome)) +
+  ggthemes::scale_color_colorblind() +
+  ggthemes::scale_fill_colorblind() +
+  theme_bw() +
+  theme(legend.position = "top")
+```
+Based on the binary outcome, there are no significant difference in continuous variable distribution and their summary statics for Bing lexicon (xb), NRC lexicon (xn), AFINN (xa) and sedimentr derived features (xs). But word count derived features (xw) showed the different outcomes.
+
+###3. Visualize the relationships between the continuous inputs?
+
+```{r,solution_03}
+df_all %>% 
+  select(starts_with('x')) %>% 
+  cor() %>% 
+  corrplot::corrplot()
+```
+
+Most of the inputs are not correlated.
+
+### 4.Visualize the relationships between the continuous outputs (response and thelog-transformed response) with respect to the continuous inputs.
+
+```{r}
+df_all %>% 
+  ggplot(mapping = aes(x = xb_04, y = response)) +
+  geom_point() +
+  theme_bw()
+
+```
+
+```{r}
+lf_all %>% 
+  ggplot(mapping = aes(x = value, y = response)) +
+  geom_point() +
+  facet_wrap(~name, scales = "free")+
+  theme_bw()
+
+```
+
+```{r}
+log_all %>% 
+  ggplot(mapping = aes(x = xa_01, y = logresponse)) +
+  geom_point() +
+  theme_bw()
+```
+
+```{r}
+lf_all %>% 
+  ggplot(mapping = aes(x = value, y = logresponse)) +
+  geom_point() +
+  facet_wrap(~name, scales = "free")+
+ theme_bw()
+
+```
+```{r}
+log_all %>% 
+  ggplot(mapping = aes(x = xb_07, y = logresponse)) +
+  geom_point() +
+  theme_bw()
+
+```
+
+The trends seem like a linear distribution in the Log_transformed response. It's hard to tell that the trends depends on the categorical inputs. 
+
+###5.How can you visualize the behavior of the binary outcome with respect to the continuous inputs?
+```{r}
+lf_all %>% 
+  ggplot(mapping = aes(x = value, y = outcome)) +
+  geom_point(size = 3.5, alpha = 0.5) +
+  facet_wrap(~name, scales = "free")+
+  theme_bw()
+```
+```{r}
+log_all %>% 
+  ggplot(mapping = aes(x = xb_07, y = outcome)) +
+  geom_point(size = 3.5, alpha = 0.5) +
+  theme_bw()
+```

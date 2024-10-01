@@ -1,0 +1,119 @@
+---
+title: "PartIVC"
+author: "Hua Ji"
+date: "4/26/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load packages
+The `tidyverse` and `caret` packages are loaded below.
+
+```{r, load_packages}
+library(tidyverse)
+library(caret)
+```
+
+## Read and prepare data
+
+The code chunk below reads in the `df_all` data and displays 
+
+```{r, read_data}
+df_all <- readr::read_csv("final_project_train.csv", col_names = TRUE)
+df_all %>%glimpse()
+```
+```{r}
+pf_all<-df_all %>% mutate(y=ifelse(outcome=="event",1,0))%>%select(!c(rowid,response,outcome))
+pf_all
+```
+
+```{r}
+library(rstanarm)
+```
+
+```{r}
+mod3_Bayesian_classification <-stan_glm(y~.,data =pf_all, 
+                             family = binomial(link = "logit"),
+                             prior_intercept = normal(0, 1, autoscale = TRUE),
+                             prior = normal(0, 1, autoscale = TRUE),
+                             seed = 12345)
+```
+
+```{r}
+viz_grid <- expand.grid(xn_04 =seq(-3.2,3.2,length.out=101),
+                        xb_07=seq(-3,3, length.out=6),
+                        xb_01=0,
+                        xb_02=0,
+                        xb_03=0,
+                        xb_05=0,
+                        xb_06=0,
+                        xn_07=0,
+                        xb_08=0,
+                        xn_01=0,
+                        xn_02=0,
+                        xn_03=0,
+                        xb_04=0,
+                        xn_05=0,
+                        xn_06=0,
+                        xn_08=0,
+                        xa_01=0,
+                        xa_02=0,
+                        xa_03=0,
+                        xa_04=0,
+                        xa_05=0,
+                        xa_06=0,
+                        xa_07=0,
+                        xa_08=0,
+                        xw_01=0,
+                        xw_02=0,
+                        xw_03=0,
+                        xs_01=0,
+                        xs_02=0,
+                        xs_03=0,
+                        xs_04=0,
+                        xs_05=0,
+                        xs_06=0,
+                        region="XX",
+                        customer="A",
+                        KEEP.OUT.ATTRS = FALSE,
+                        stringsAsFactors = FALSE) %>% 
+  as.data.frame() %>% tibble::as_tibble()
+  viz_grid%>%glimpse()
+```
+
+
+```{r}
+posterior_linpred(mod3_Bayesian_classification, newdata = viz_grid)%>%dim()
+```
+
+```{r}
+posterior_linpred(mod3_Bayesian_classification, newdata = viz_grid) %>% 
+  as.data.frame() %>% tibble::as_tibble() %>% 
+  tibble::rowid_to_column("post_id") %>% 
+  pivot_longer(!c("post_id"), names_to = 'pred_id') %>% 
+  mutate(across(.cols = 'pred_id', .fns = as.numeric)) %>% 
+  group_by(pred_id) %>% 
+  summarise(num_post = n(),
+            trend_avg = mean(value),
+            trend_lwr = quantile(value, 0.05),
+            trend_upr = quantile(value, 0.95)) %>% 
+  ungroup() %>% 
+  left_join(viz_grid %>% tibble::rowid_to_column("pred_id"),
+            by = "pred_id") %>% 
+  ggplot(mapping = aes(x = xn_04)) +
+  
+  geom_line(mapping = aes(y = trend_avg,
+                          color = as.factor(xb_07)),
+                size = 1.) +
+  facet_wrap(~xb_07, labeller = "label_both") +
+  scale_fill_viridis_d("xb_07") +
+  scale_color_viridis_d("xb_07") +
+  labs(y = "mean trend") +
+  theme_bw() +
+  theme(legend.position = "top")
+```
+
+Mean trend for the classification model increased with the most important sentiment derived feature. We can easily see that the second input can affect the the mean trend. The mean trend decreased with increasing the second inputs. This indicated that these two input features have the additive effect.

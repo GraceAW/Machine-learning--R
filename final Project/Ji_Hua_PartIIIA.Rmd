@@ -1,0 +1,225 @@
+---
+title: "PartIIIA"
+author: "Hua Ji"
+date: "4/23/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Load packages
+The `tidyverse` and `caret` packages are loaded below.
+
+```{r, load_packages}
+library(tidyverse)
+library(caret)
+```
+
+## Read and prepare data
+
+The code chunk below reads in the `df_all` data and displays 
+
+```{r, read_data}
+df_all <- readr::read_csv("final_project_train.csv", col_names = TRUE)
+df_all %>%glimpse()
+```
+
+
+```{r}
+pf_all<-df_all %>% mutate(y=ifelse(outcome=="event",1,0))
+pf_all
+```
+
+###Models
+
+##Categorical variables only – linear additive
+```{r}
+mod1<-glm(y~(region+customer), data =pf_all, family="binomial")
+summary(mod1)
+```
+
+We can visualize the coefficient estimates and their confidence intervals.
+
+
+```{r}
+ mod1%>% 
+  coefplot::coefplot() +
+  theme_bw() +
+  theme(legend.position = 'none')
+```
+##Continuous variables only – linear additive
+
+```{r}
+mod2<-glm(y ~.-rowid-response-outcome-region-customer,data =pf_all,family = "binomial")
+summary(mod2)
+```
+
+
+##Coefficient summaries.
+```{r}
+mod2 %>% 
+  coefplot::coefplot() +
+  theme_bw() +
+  theme(legend.position = 'none')
+```
+##All categorical and continuous variables – linear additive
+
+```{r}
+mod3 <-glm(y~.-rowid-response-outcome,data =pf_all,family = "binomial")
+summary(mod3)
+```
+
+
+##Coefficient summaries.
+```{r}
+mod3 %>% 
+  coefplot::coefplot() +
+  theme_bw() +
+  theme(legend.position = 'none')
+```
+##Interact region with continuous inputs, do not include customer
+```{r}
+mod4<- glm(y~ region * (.-region), data = pf_all %>% select(!c("rowid", "customer", "response","outcome")),family = "binomial")
+summary(mod4)
+```
+
+
+##Coefficient summaries.
+```{r}
+mod4 %>% 
+  coefplot::coefplot() +
+  theme_bw() +
+  theme(legend.position = 'none')
+```
+
+##Interact customer with continuous inputs, do not include region
+
+```{r}
+mod5<- glm(y ~ customer * (.-customer), data = pf_all %>% select(!c("rowid", "region", "response","outcome")),family = "binomial")
+summary(mod5)
+```
+
+##Coefficient summaries.
+```{r}
+mod5 %>% 
+  coefplot::coefplot() +
+  theme_bw() +
+  theme(legend.position = 'none')
+```
+
+##All pairwise interactions of continuous inputs, do not include categorical inputs
+
+```{r}
+mod6<- glm(y ~ (.)^2, data = pf_all %>% select(!c("rowid", "customer", "response","outcome","region")),family = "binomial")
+summary(mod6)
+```
+
+
+##Coefficient summaries.
+```{r}
+mod6 %>% 
+  coefplot::coefplot() +
+  theme_bw() +
+  theme(legend.position = 'none')
+```
+##Natural splines interaction
+
+```{r}
+mod7<- glm(y ~ splines::ns(xb_04,5)*splines::ns(xn_05,5), data = pf_all,family = "binomial")
+summary(mod7)
+```
+
+
+##Coefficient summaries.
+
+```{r}
+mod7 %>% 
+  coefplot::coefplot() +
+  theme_bw() +
+  theme(legend.position = 'none')
+```
+## categorical variables and continuous variables interactions
+
+```{r}
+mod8<- glm(y ~(. - rowid - response - outcome - region - 
+    customer)*(region+customer), data = pf_all,family = "binomial")
+summary(mod8)
+```
+
+
+## Quadratic and region interactions.
+
+```{r}
+mod9<- glm(y ~ (.)^2*region, data = pf_all %>% select(!c("rowid", "customer", "response","outcome")),family = "binomial")
+summary(mod9)
+```
+
+##Coefficient summaries.
+
+```{r}
+mod9 %>% 
+  coefplot::coefplot() +
+  theme_bw() +
+  theme(legend.position = 'none')
+```
+
+###Model comparison
+Extract multiple performance metrics for each model.
+```{r}
+extract_metrics <- function(mod, mod_name)
+{
+  broom::glance(mod) %>% 
+    mutate(model_name = mod_name)
+}
+
+model_results <- purrr::map2_dfr(list(mod1, mod2, mod3, mod4,
+                                      mod5, mod6, mod7, mod8,
+                                      mod9),
+                                 sprintf("mod-%02d", 1:9),
+                                 extract_metrics)
+
+```
+
+Let’s compare the performance rankings between the 9 models based on AIC and BIC
+
+```{r}
+model_results %>% 
+  select(model_name, AIC, BIC) %>% 
+  pivot_longer(!c("model_name")) %>% 
+  mutate(model_id = stringr::str_extract(model_name, "\\d+")) %>% 
+  ggplot(mapping = aes(x = model_id, y = value)) +
+  geom_point(size = 3.5) +
+  facet_wrap(~name, scales = "free_y") +
+  labs(x = '') +
+  theme_bw()
+```
+I have experienced several warnings while fitting the generalized linear models. Using AIC and BIC as performance metrics, we can choose mod3 as the best model.
+
+##Top 3 models'Coefficient summaries.
+
+```{r}
+mod3 %>% 
+  coefplot::coefplot() +
+  theme_bw() +
+  theme(legend.position = 'none')
+```
+
+##Coefficient summaries.
+
+```{r}
+mod2 %>% 
+  coefplot::coefplot() +
+  theme_bw() +
+  theme(legend.position = 'none')
+```
+##Coefficient summaries.
+
+```{r}
+mod4 %>% 
+  coefplot::coefplot() +
+  theme_bw() +
+  theme(legend.position = 'none')
+```
+
+Compare the coefficient summary for the top three model, the main effects are similar for additive models, but they are different for the interation model. For example, we can see the xw variable doesn't have effect on the outcome. It seems that xn_07 and xn_08 are important.

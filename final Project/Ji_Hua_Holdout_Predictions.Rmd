@@ -1,0 +1,154 @@
+---
+title: "Untitled"
+author: "Hua Ji"
+date: "4/27/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, load_tidy_package}
+library(tidyverse)
+```
+
+```{r, load_caret_package}
+library(caret)
+```
+
+## Read training data
+
+The training data set is read in the code chunk below assuming you have downloaded the data from Canvas.  
+
+```{r, read_data_01}
+df_all <- readr::read_csv("final_project_train.csv", col_names = TRUE)
+```
+
+## Regression problem
+
+The data associated with the regression task is created below. Note that the log-transformed response is calculated and assigned to the variable `y`.  
+
+```{r, reg_01}
+dfii <- df_all %>% 
+  mutate(y = log(response)) %>% 
+  select(region, customer, starts_with('x'), y)
+```
+
+```{r, reg_02}
+my_ctrl_regress <- trainControl(method = 'repeatedcv', number = 5, repeats = 3)
+```
+
+Next, define the primary performance metric of the model.  
+
+```{r, reg_03}
+my_metrics_regress <- 'RMSE'
+```
+
+
+```{r, reg_04a}
+my_regress_method <- 'svmRadial'
+```
+  
+
+```{r, reg_04}
+set.seed(2022)
+fit_svm <- train (y~.,
+                     data = dfii,
+                     method = my_regress_method,
+                     preProcess = c("center", "scale"),
+                     metric = my_metrics_regress,
+                     trControl = my_ctrl_regress)
+```
+
+
+```{r, reg_05}
+fit_svm
+```
+
+## Classification problem
+
+```{r, class_01}
+dfiiiD <- df_all %>% 
+  mutate(outcome = factor(outcome, 
+                          levels = c("event", "non_event"))) %>% 
+  select(region, customer, starts_with('x'), outcome)
+```
+
+
+### Accuracy
+
+The code chunk below specifies the resampling scheme that we will use for the model associated with the Accuracy metric.  
+
+```{r, acc_01}
+my_ctrl_acc <- trainControl(method = 'repeatedcv', number = 5, repeats = 3)
+```
+
+Next, define the primary performance metric.  
+
+```{r, acc_02}
+my_metrics_acc <- "Accuracy"
+```
+
+
+```{r, acc_03}
+my_binary_method <- 'glmnet'
+```
+
+
+
+```{r, acc_04}
+set.seed(2022)
+       fit_Enet<- train(outcome ~ .,
+                        data = dfiiiD,
+                        method = my_binary_method,
+                        preProcess = c('center', 'scale'),
+                        metric = my_metrics_acc,
+                        trControl = my_ctrl_acc)
+```
+
+
+```{r, acc_05}
+fit_Enet
+```
+
+```{r, hold_01}
+holdout <- readr::read_csv('final_project_holdout_inputs.csv', col_names = TRUE)
+```
+```{r, hold_04}
+holdout_inputs <- holdout %>% 
+  select(-rowid)
+```
+
+## Compile predictions
+
+```{r, compile_01}
+my_preds <- tibble::tibble(
+  y = predict(fit_svm, newdata = holdout_inputs),
+  outcome = predict(fit_Enet, newdata = holdout_inputs)
+) %>% 
+  bind_cols(
+    predict(fit_Enet, newdata = holdout_inputs, type = 'prob') %>% 
+      select(probability = event)
+  ) %>% 
+  tibble::rowid_to_column('id')
+```
+
+
+A glimpse of the predictions is shown below.  
+
+```{r, compile_02}
+my_preds %>% glimpse()
+```
+
+The head of the compiled predictions is shown below.  
+
+```{r, compile_03}
+my_preds %>% head()
+```
+
+```{r, compile_04}
+my_preds %>% 
+  readr::write_csv('HoldoutTest.csv', col_names = TRUE)
+```
+

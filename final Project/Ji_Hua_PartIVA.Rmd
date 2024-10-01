@@ -1,0 +1,23 @@
+---
+title: "PartIVA"
+author: "Hua Ji"
+date: "4/26/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Part iv: Interpretation – ivA)
+
+1.The best regression model is SVM and the best classification model is Elastic net model.
+
+2. In the regression model the most important variable is xb_04.
+In the classification model the most important variable is customerE.
+
+3.The most important variables are not similar for the regression and classification tasks. In the regression model, one 
+of the sentiment derived feature types “dominate” the most important variables.
+One of the sentiment derived feature types appear to be not helpful at all, for example, xw variables.
+
+4. Based on my modeling results, I do believe that these sentiment derived features are helpful at  predicting the outputs, no matter whether the outputs are response or outcome. I think that my best model results are good enough and also that the conclusion drawn for sediment was correct, that is to say, "greater positive sentiment will be associated with greater probability of achieving the sales targets".

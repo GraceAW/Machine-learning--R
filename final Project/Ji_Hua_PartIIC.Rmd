@@ -1,0 +1,130 @@
+---
+title: "PartIIC"
+author: "Hua Ji"
+date: "4/24/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load packages
+The `tidyverse` and `caret` packages are loaded below.
+
+```{r, load_packages}
+library(tidyverse)
+library(caret)
+```
+
+## Read and prepare data
+
+The code chunk below reads in the `df_all` data and displays 
+
+```{r, read_data}
+df_all <- readr::read_csv("final_project_train.csv", col_names = TRUE)
+df_all %>%glimpse()
+```
+
+## Added log-transformed response
+
+```{r}
+log_all<-df_all %>%mutate(logresponse =log(response))
+log_all%>%glimpse()
+```
+
+```{r,eval=TRUE}
+mod4<- lm(logresponse ~region* (.-region), data = log_all %>% select(!c("rowid", "customer", "response","outcome")))
+```
+
+
+```{r,eval=TRUE}
+mod3<- lm(logresponse ~., data = log_all %>% select(!c("rowid", "customer", "response","outcome","region")))
+```
+
+```{r,eval=TRUE}
+broom::glance(mod3)
+broom::glance(mod4)
+```
+
+```{r}
+viz_grid <- expand.grid(xb_04 =seq(-3.2,3.2,length.out=101),
+                        xn_07=seq(-3,3, length.out=6),
+                        xb_01=0,
+                        xb_02=0,
+                        xb_03=0,
+                        xb_05=0,
+                        xb_06=0,
+                        xb_07=0,
+                        xb_08=0,
+                        xn_01=0,
+                        xn_02=0,
+                        xn_03=0,
+                        xn_04=0,
+                        xn_05=0,
+                        xn_06=0,
+                        xn_08=0,
+                        xa_01=0,
+                        xa_02=0,
+                        xa_03=0,
+                        xa_04=0,
+                        xa_05=0,
+                        xa_06=0,
+                        xa_07=0,
+                        xa_08=0,
+                        xw_01=0,
+                        xw_02=0,
+                        xw_03=0,
+                        xs_01=0,
+                        xs_02=0,
+                        xs_03=0,
+                        xs_04=0,
+                        xs_05=0,
+                        xs_06=0,
+                        region="XX",
+                        customer="A",
+                        KEEP.OUT.ATTRS = FALSE,
+                        stringsAsFactors = FALSE) %>% 
+  as.data.frame() %>% tibble::as_tibble()
+viz_grid%>%glimpse()
+```
+
+```{r, make_tidy_predict_function}
+tidy_predict <- function(mod, xnew)
+{
+  pred_df <- predict(mod, xnew, interval = "confidence") %>% 
+    as.data.frame() %>% tibble::as_tibble() %>% 
+    dplyr::select(pred = fit, ci_lwr = lwr, ci_upr = upr) %>% 
+    bind_cols(predict(mod, xnew, interval = 'prediction') %>% 
+                as.data.frame() %>% tibble::as_tibble() %>% 
+                dplyr::select(pred_lwr = lwr, pred_upr = upr))
+  
+  xnew %>% bind_cols(pred_df)
+}
+```
+
+```{r, solution_02b, eval=TRUE}
+pred_lm_3 <- tidy_predict(mod3,viz_grid)
+pred_lm_4 <- tidy_predict(mod4,viz_grid)
+```
+
+Create separate code chunks for visualization of mod3. 
+```{r}
+pred_lm_3%>%ggplot(mapping = aes(x=xb_04))+
+  geom_ribbon(mapping = aes(ymin=pred_lwr, ymax=pred_upr),fill="orange")+
+  geom_ribbon(mapping =aes(ymin=ci_lwr,ymax=ci_upr),fill="grey")+
+  geom_line(mapping = aes(y=pred))+
+  facet_wrap(~xn_07)
+```
+
+
+Create separate code chunks for  visualization of mod4. 
+```{r}
+pred_lm_4%>%ggplot(mapping = aes(x=xb_04))+
+  geom_ribbon(mapping = aes(ymin=pred_lwr, ymax=pred_upr),fill="orange")+
+  geom_ribbon(mapping =aes(ymin=ci_lwr,ymax=ci_upr),fill="grey")+
+  geom_line(mapping = aes(y=pred))+
+  facet_wrap(~xn_07)
+```
+
+The above graphs showed that the predictive trends are consistent between the 2 selected generalized linear models.

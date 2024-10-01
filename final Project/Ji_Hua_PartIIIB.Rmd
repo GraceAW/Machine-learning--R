@@ -1,0 +1,82 @@
+---
+title: "Classification_PartIIIB"
+author: "Hua Ji"
+date: "4/25/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Load packages
+The `tidyverse` and `caret` packages are loaded below.
+
+```{r, load_packages}
+library(tidyverse)
+library(caret)
+```
+
+## Read and prepare data
+
+The code chunk below reads in the `df_all` data and displays 
+
+```{r, read_data}
+df_all <- readr::read_csv("final_project_train.csv", col_names = TRUE)
+df_all %>%glimpse()
+```
+
+```{r}
+pf_all<-df_all %>% mutate(y=ifelse(outcome=="event",1,0))
+pf_all
+```
+
+
+```{r}
+library(rstanarm)
+```
+```{r}
+mod3_Bayesian <-stan_glm(y~.-rowid-response-outcome,data =pf_all, 
+                             family = binomial(link = "logit"),
+                             prior_intercept = normal(0, 1, autoscale = TRUE),
+                             prior = normal(0, 1, autoscale = TRUE),
+                             seed = 12345)
+                            
+```
+
+
+```{r}
+summary(mod3_Bayesian)
+```
+
+I choose mod4 as second model, because this is the second best model in my 9 linear model.
+
+```{r}
+mod4_Bayesian <-stan_glm(y~ region * (.-region), 
+                         data = pf_all %>% select(!c("rowid", "customer", "response","outcome")), 
+                         family = binomial(link = "logit"), 
+                         prior_intercept = normal(0, 1, autoscale = TRUE),
+                         prior = normal(0, 1, autoscale = TRUE),
+                         seed = 12345)
+
+```
+
+
+
+```{r}
+summary(mod4_Bayesian)
+```
+
+
+```{r}
+modelr::rmse(mod3_Bayesian,data = pf_all)
+modelr::rmse(mod4_Bayesian,data = pf_all)
+
+modelr::mae(mod3_Bayesian,data = pf_all )
+modelr::mae(mod4_Bayesian,data = pf_all)
+``` 
+According to the rsme and mae results, model 3 is the best model.
+
+Visualize the coefficient posterior summary statistics. 
+```{r}
+plot(mod3_Bayesian)+theme_bw()
+```

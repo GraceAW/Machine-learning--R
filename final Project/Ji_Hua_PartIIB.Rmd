@@ -1,0 +1,118 @@
+---
+title: "PartIIB"
+author: "Hua Ji"
+date: "4/23/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load packages
+The `tidyverse` and `caret` packages are loaded below.
+
+```{r, load_packages}
+library(tidyverse)
+library(caret)
+```
+
+## Read and prepare data
+
+The code chunk below reads in the `df_all` data and displays 
+
+```{r, read_data}
+df_all <- readr::read_csv("final_project_train.csv", col_names = TRUE)
+df_all %>%glimpse()
+```
+
+## Added log-transformed response
+
+```{r}
+log_all<-df_all %>%mutate(logresponse =log(response))
+log_all%>%glimpse()
+```
+
+## creates a long-format dataset by gathering the input features into a single column via the pivot_longer() function.
+
+```{r, make_lf_data, eval=TRUE}
+lf_all <- log_all %>% 
+  tibble::rowid_to_column("obs_id") %>% 
+  pivot_longer(!c("obs_id","outcome", "customer", "region", "response", "rowid", "logresponse")) %>%
+  mutate(input_id = str_sub(name, 2, 5))
+lf_all %>% glimpse()
+```
+
+```{r}
+library(rstanarm)
+```
+```{r}
+mod3_Bayesian <- stan_lm(logresponse~.-rowid-response-outcome,data =log_all,
+                 prior = R2(location = 0.5),
+                 seed = 432123)
+```
+```{r}
+mod3_Bayesian%>%summary
+```
+
+##Posterior visualizations
+
+```{r}
+plot(mod3_Bayesian)+ theme_bw()
+```
+
+```{r}
+plot(mod3_Bayesian, pars = c("xb_04", "xb_07", "xb_08","xn_04","xn_05","xn_08","regionYY","regionZZ","customerG","customerK","customerM","customerQ")) + theme_bw()
+
+```
+
+```{r}
+mod4_Bayesian <- stan_lm(logresponse ~(.)*region, data = log_all %>% select(!c("rowid", "customer", "response","outcome")),prior = R2(location = 0.5),seed = 432123)
+summary(mod4_Bayesian)
+```
+
+
+
+I choose mod4 as the second best, because mod4 has relative lower AIC and  BIC, also it has relative large r.squared.
+
+###Model comparison
+
+##we can use RMSE, MAE, and rsquare as the metrics to evaluate the model performance.
+
+```{r}
+modelr::rmse(mod3_Bayesian,data = log_all)
+modelr::rmse(mod4_Bayesian,data = log_all)
+
+modelr::mae(mod3_Bayesian,data = log_all)
+modelr::mae(mod4_Bayesian,data = log_all)
+
+modelr::rsquare(mod3_Bayesian,data = log_all)
+modelr::rsquare(mod4_Bayesian,data = log_all)
+```   
+
+The best model is mod4_bayesian according to the performance metrics. This model has the lower RMSE, MAE and r-square.
+
+```{r}
+plot(mod4_Bayesian)+ theme_bw()
+```
+
+```{r}
+fit_lm_mod4 <- lm(logresponse ~(.)*region, data = log_all %>% select(!c("rowid", "customer", "response","outcome")))
+
+fit_lm_mod4 %>% summary()
+``` 
+ 
+
+```{r}
+as.data.frame(mod4_Bayesian) %>% tibble::as_tibble() %>% 
+  ggplot(mapping = aes(x = sigma)) +
+  geom_histogram(bins = 55) +
+  geom_vline(xintercept = stats::sigma(fit_lm_mod4),
+             color = "darkorange", linetype = "dashed", size = 1.1) +
+  theme_bw()
+```
+As shown above, the maximum likelihood estimate (MLE) on the noise deviate from the posterior mode of the mod4_Bayesian. I think the posterior is precise since the $\sigma$ MLE is within 2$\sigma$ range.
+
+
+
+

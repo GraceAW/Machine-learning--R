@@ -1,0 +1,230 @@
+---
+title: "Final Project for PPG PartII : Regression-iiA"
+author: "Hua Ji"
+date: "4/22/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load packages
+The `tidyverse` and `caret` packages are loaded below.
+
+```{r, load_packages}
+library(tidyverse)
+library(caret)
+```
+
+## Read and prepare data
+
+The code chunk below reads in the `df_all` data and displays 
+
+```{r, read_data}
+df_all <- readr::read_csv("final_project_train.csv", col_names = TRUE)
+df_all %>%glimpse()
+```
+
+## Added log-transformed response
+
+```{r}
+log_all<-df_all %>%mutate(logresponse =log(response))%>%select(!c(rowid, response,outcome))
+log_all%>%glimpse()
+```
+
+
+###Models
+
+##Categorical variables only – linear additive
+
+```{r}
+mod1<-lm(logresponse~region+customer,data =log_all)
+mod1%>%summary()
+```
+
+
+```{r}
+mod1 %>% 
+  coefplot::coefplot() +
+  theme_bw() +
+  theme(legend.position = 'none')
+```
+
+
+##Continuous variables only – linear additive
+
+```{r}
+mod2<-lm(logresponse~.-region-customer,data =log_all)
+summary(mod2)
+```
+
+
+```{r}
+mod2 %>% 
+  coefplot::coefplot() +
+  theme_bw() +
+  theme(legend.position = 'none')
+```
+
+
+##All categorical and continuous variables – linear additive
+
+```{r}
+mod3 <-lm(logresponse~.,data =log_all)
+summary(mod3)
+```
+
+
+```{r}
+mod3 %>% 
+  coefplot::coefplot() +
+  theme_bw() +
+  theme(legend.position = 'none')
+```
+##Interact region with continuous inputs, do not include customer
+```{r}
+mod4<- lm(logresponse ~ region * (.-region), data = log_all %>% select(!c( "customer" )))
+summary(mod4)
+```
+
+```{r}
+mod4 %>% 
+  coefplot::coefplot() +
+  theme_bw() +
+  theme(legend.position = 'none')
+```
+
+##Interact customer with continuous inputs, do not include region
+
+```{r}
+mod5<- lm(logresponse ~ customer * (.-customer), data = log_all %>% select(!c( "region")))
+summary(mod5)
+```
+
+```{r}
+mod5 %>% 
+  coefplot::coefplot() +
+  theme_bw() +
+  theme(legend.position = 'none')
+```
+
+
+##All pairwise interactions of continuous inputs, do not include categorical inputs
+
+```{r}
+mod6<- lm(logresponse ~ (.)^2, data = log_all %>% select(!c( "customer","region")))
+summary(mod6)
+```
+
+```{r}
+mod6 %>% 
+  coefplot::coefplot() +
+  theme_bw() +
+  theme(legend.position = 'none')
+```
+
+##Natural splines interaction
+
+```{r}
+mod7<- lm(logresponse ~ splines::ns(xb_04,5)*splines::ns(xn_05,5), data = log_all)
+summary(mod7)
+```
+
+
+## categorical variables and continuous variables interactions
+
+```{r}
+mod8<- lm(logresponse ~(.- region - 
+    customer)*(region+customer), data = log_all)
+summary(mod8)
+```
+
+## Quadratic and region interactions.
+
+```{r}
+mod9<- lm(logresponse ~ customer*region, data = log_all )
+summary(mod9)
+```
+
+
+
+###Model comparison
+Extract multiple performance metrics for each model.
+```{r}
+extract_metrics <- function(mod, mod_name)
+{
+  broom::glance(mod) %>% 
+    mutate(model_name = mod_name)
+}
+
+model_results <- purrr::map2_dfr(list(mod1, mod2, mod3, mod4,
+                                      mod5, mod6, mod7, mod8,
+                                      mod9),
+                                 sprintf("mod-%02d", 1:9),
+                                 extract_metrics)
+
+```
+
+Print the R-squared associated with each model. The models are ordered by decreasing R-squared.
+```{r}
+model_results %>% 
+  select(r.squared, model_name) %>% 
+  arrange(desc(r.squared))
+```
+we can visualize the training set R-squared values. 
+
+```{r}
+model_results %>% 
+  ggplot(mapping = aes(x = r.squared, y =model_name )) +
+  geom_linerange(mapping = aes(xmin = 0,
+                               xmax = r.squared)) +
+  geom_point(size = 4.5) +
+  labs(x = '') +
+  theme_bw()
+
+```
+
+Let’s compare the performance rankings between the 9 models based on AIC and BIC
+
+```{r}
+model_results %>% 
+  select(model_name, r.squared,AIC, BIC) %>% 
+  pivot_longer(!c("model_name")) %>% 
+  mutate(model_id = stringr::str_extract(model_name, "\\d+")) %>% 
+  ggplot(mapping = aes(x = model_id, y = value)) +
+  geom_point(size = 3.5) +
+  facet_wrap(~name, scales = "free_y") +
+  labs(x = '') +
+  theme_bw()
+```
+Based on the AIC,BIC, r.squared results, I choose mod3 as the best model. 
+The top 3 models are mod8,mod3, and mod4.
+
+##Coefficient summaries for mod8.
+
+```{r}
+mod8 %>% 
+  coefplot::coefplot() +
+  theme_bw() +
+  theme(legend.position = 'none')
+```
+
+##Coefficient summaries for mod3.
+```{r}
+mod3 %>% 
+  coefplot::coefplot() +
+  theme_bw() +
+  theme(legend.position = 'none')
+```
+##Coefficient summaries.
+
+```{r}
+mod4 %>% 
+  coefplot::coefplot() +
+  theme_bw() +
+  theme(legend.position = 'none')
+```
+
+The distribution tendency of the coefficient summaries of mod3 and mod4 are similiar, but mod8's is a little different.
+It seems that xb-04,xn-7,xn-08,regionZZ and region YY are important inputs. 
